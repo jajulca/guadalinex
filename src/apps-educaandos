@@ -1,0 +1,212 @@
+#!/bin/bash
+
+#Variables
+
+gitfolder=/home/$USER/guadalinex
+gitguadalinex=https://github.com/aosucas499/guadalinex
+branch=main
+background=/usr/share/backgrounds/educaandos_wallpaper.png
+bgsize=$(du $background|cut -f 1)
+isConnectionAvailable=$(echo -e "GET http://google.com HTTP/1.0\n\n" | nc google.com 80 > /dev/null 2>&1 && echo "True" || echo "False")
+
+# Comprobamos si hay internet
+# ---
+
+if [[ $isConnectionAvailable == "False" ]]; then
+	zenity --no-wrap \
+        --warning \
+        --title "Sin conexión a Internet" \
+        --text "Es necesaria conexión a Internet para poder utilizar esta app."
+        
+    exit 1;
+fi 
+
+echo ""
+echo "Hay conexión a Internet. Seguimos..."
+echo ""
+
+# Función que repara las actualizaciones de cga-update-manager
+# por alguna razón en las versiones previas de la versión "plus"
+# muestra un error
+
+# Función que comprueba que el usuario que lanza la app tiene derechos admin.
+
+function adminGroup {
+
+        if getent group admin |grep $USER; then
+                echo "El usuario pertenece al grupo admin, continuamos..."
+        else
+               zenity --no-wrap \
+       		--warning \
+        	--title "No tiene derechos de administrador" \
+        	--text "Contacte con su Coordinador/a TDE para instalar aplicaciones."
+        
+    		exit 1;
+        fi
+}
+
+function fixCgaupdate {
+
+	if [ -f "/var/log/cga-update-manager/cga-updater.log" ]; then
+	
+		echo "CGA-update-manager existente"
+	else
+		sudo mkdir -p /var/log/cga-update-manager/
+		sudo touch /var/log/cga-update-manager/cga-updater.log
+		sudo chmod 666 /var/log/cga-update-manager/cga-updater.log
+		echo "CGA-update-manager reparado"
+		notify-send "CGA-update-manager reparado"
+	fi
+}
+
+# Función que repara el fondo de educaandos plus cuando es cambiado por cga para la versión oficial en alguna actualización.
+
+function fixBackground {
+
+		#echo "$bgsize"
+	if [[ $bgsize = "500" ]]; then
+		#echo "$bgsize"
+		echo "Fondo de pantalla incorrecto, corrigiendo..."
+		notify-send "Fondo de pantalla incorrecto, corrigiendo..."
+		sudo wget https://github.com/aosucas499/guadalinex/raw/main/isobuilder/eggs/educaandos_wallpaper-plus.png -O /tmp/educaandos_wallpaper-plus.png
+		sudo cp /tmp/educaandos_wallpaper-plus.png /usr/share/backgrounds/educaandos_wallpaper.png
+	else
+		#echo "$bgsize"
+		echo "fondo de pantalla apropiado"
+	fi
+}	
+
+function arduinoGroup {
+
+	if groups $USER | grep -q "dialout"; then
+		echo "El usuario pertenece al grupo dialout"
+	else
+		echo "El usuario no pertenece al grupo, corrigiendo..."
+		notify-send "El usuario no pertenece al grupo, corrigiendo..."
+		sudo usermod -a -G dialout $USER
+	fi
+}
+
+function restorePanelapp {
+
+	if [ -f "/usr/share/applications/restorepanel.desktop" ]; then
+		echo "App restore panel existente"
+	else
+		cd /home/$USER
+		sudo cp guadalinex/src/restorepanel.desktop /usr/share/applications
+		echo "Restore Panel App instalada"
+		notify-send "Restore Panel App instalada"
+	fi
+}
+
+# Función para descargar repositorio en caso de que no exista en el sistema.
+# Por ejemplo, en el primer inicio. También instala la app en el sistema.
+
+function installOnsystem {
+
+	if [ -f "/usr/bin/apps-educaandos" ]; then
+	
+		descargarRepo
+	else
+		cd /home/$USER
+		echo ""
+		echo "Descargando APP, espere unos segundos"
+		echo ""
+		notify-send "Descargando APP, espere unos segundos"
+		git clone --branch $branch $gitguadalinex
+		sudo cp guadalinex/src/AndaTuz2.svg /usr/share/icons/
+		sudo cp guadalinex/src/apps-educaandos.desktop /usr/share/applications
+		sudo cp guadalinex/src/apps-educaandos /usr/bin
+		echo ""
+		echo "Ejecútela desde el menú Herramientas del Sistema"
+		echo ""
+		notify-send "Ejecútela desde el menú Herramientas del Sistema"
+		exit
+		
+	fi
+	
+}
+
+# Función para descargar repositorio en caso de que no exista la carpeta del proyecto en el sistema.
+# Por ejemplo, en el primer inicio. También instala la app en el sistema.
+
+function descargarRepo {
+
+	if [ -d "$gitfolder" ]; then
+		updateRepo
+	else
+		cd /home/$USER
+		echo ""
+		echo "Descargando APP, espere unos segundos"
+		echo ""
+		notify-send "Descargando APP, espere unos segundos"
+		git clone --branch $branch $gitguadalinex
+		sudo cp guadalinex/src/AndaTuz2.svg /usr/share/icons/
+		sudo cp guadalinex/src/apps-educaandos.desktop /usr/share/applications
+		sudo cp guadalinex/src/apps-educaandos /usr/bin
+		echo ""
+		echo "Ejecútela desde el menú Herramientas del Sistema"
+		echo ""
+		notify-send "Ejecútela desde el menú Herramientas del Sistema"
+		exit
+	fi
+			
+}
+
+
+# Función para actualizar apps-guadalinex-20 
+# En el caso de que se haya modificado o borrado algún archivo de la carpeta local del sistema.
+# Y en el caso de que se haya modificado o borrado algún archivo en el repositorio remoto.
+
+function updateRepo {
+
+	cd $gitfolder
+	if git diff-index --quiet HEAD --; then
+		echo "Repo github presente"
+		cd $gitfolder
+		# Actualiza siempre la carpeta local con respecto al remoto
+		git pull
+		echo ""
+		echo ""
+		sleep 3
+		echo ""
+		# Copia siempre la versión actualizada del lanzador tras ser actualizado en el comando anterior.
+		#sudo cp $gitfolder/src/apps-educaandos /usr/bin
+		
+	else
+		echo ""
+		echo "Actualizando APP, espere unos segundos"
+		echo ""
+		notify-send "Actualizando APP, espere unos segundos"
+		cd /home/$USER
+		sudo rm -r guadalinex
+    		git clone --branch $branch $gitguadalinex
+    		sudo cp guadalinex/src/AndaTuz2.svg /usr/share/icons/
+		sudo cp guadalinex/src/apps-educaandos.desktop /usr/share/applications
+		sudo cp guadalinex/src/apps-educaandos /usr/bin
+		echo ""
+		echo "Ejecútela desde el menú Herramientas del Sistema"
+		echo ""
+		notify-send "Ejecútela desde el menú Herramientas del Sistema"
+		exit
+	fi
+}
+
+
+# Función que lanza la aplicación apps-guadalinex-20
+
+function execRepo {
+	
+	sh -c $gitfolder/apps-guadalinex-20
+	
+}
+
+## Variables a ejecutar en el script
+#
+adminGroup
+installOnsystem
+fixCgaupdate
+fixBackground
+arduinoGroup
+execRepo
+restorePanelapp
